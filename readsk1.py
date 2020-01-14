@@ -12,12 +12,12 @@ import numpy as np
 from keras.models import Sequential
 from keras.layers import Activation, Dense, Dropout, LSTM
 
-epochs=20
+epochs=30
 batch_size=32
 lstm_size=128
-lastdays=40
-input_colnames=['high','low']
-target_colname='close'
+lastdays=30
+input_colnames=['high','low','close']
+target_colname='target_col'
 window_size=3
 '''将5天close生成数组'''
 
@@ -40,7 +40,7 @@ def extract_window_data(df_train,window_size):
 
 
 def calc_target_col(openprice,high,low,close):
-    return (high - low) *0.75 + low
+    return (high - low) * 0.5 + low
 
 
 f=open(filename,mode='r')
@@ -71,7 +71,11 @@ for line in lines:
     '''计算中线'''
     datas.append(daydata)
 
+'''500天样本'''
+max_days=500
 df=pd.DataFrame(datas)
+if len(df)>max_days :
+    df = df[len(df) - max_days:]
 df = df.set_index(['date'],drop=True)
 
 #www = np.where(df.index==pd.to_datetime('2019-11-26',format='%Y-%m-%d'))
