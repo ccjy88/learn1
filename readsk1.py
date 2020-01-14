@@ -12,17 +12,18 @@ import numpy as np
 from keras.models import Sequential
 from keras.layers import Activation, Dense, Dropout, LSTM
 
-epochs=30
+lastdays=16
+
+epochs=100
 batch_size=32
 lstm_size=128
-lastdays=30
-input_colnames=['high','low','close']
+input_colnames=['low']
 target_colname='target_col'
 window_size=3
 '''将5天close生成数组'''
 
-#filename='300142.txt'
-filename='600031.txt'
+filename='000401m.txt'
+#filename='600000y.txt'
 
 
 def normalise_zero_base(df):
@@ -40,7 +41,8 @@ def extract_window_data(df_train,window_size):
 
 
 def calc_target_col(openprice,high,low,close):
-    return (high - low) * 0.5 + low
+    return low
+    ##return high
 
 
 f=open(filename,mode='r')
@@ -128,10 +130,10 @@ print(merge_debug)
 
 lw=2
 fig, ax = plt.subplots(1, figsize=(15, 8))
-ax.plot(merge_debug['high'], label='high', marker='o',linewidth=lw)
-#ax.plot(merge_debug['close'],color='blue',marker='o', label='close', linewidth=lw)
+ax.plot(merge_debug['high'], color='yellow',label='high', marker='o',linewidth=lw)
+ax.plot(merge_debug['close'],color='green',marker='o', label='close', linewidth=lw)
 ax.plot(pred_close,color='red',marker='o', label='pred', linewidth=lw,linestyle='dashed')
-ax.plot(merge_debug['low'], label='low',marker='o', linewidth=lw)
+#ax.plot(merge_debug['low'], label='low',marker='o', linewidth=lw)
 ax.set_ylabel('price', fontsize=14)
 ax.set_title(filename, fontsize=16)
 ax.legend(loc='best', fontsize=16);
