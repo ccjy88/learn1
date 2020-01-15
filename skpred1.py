@@ -2,7 +2,7 @@
 """
 Created on Wed Jan 15 09:39:40 2020
 
-@author: Administrator
+@author: wwh
 """
 
 import pandas as pd
@@ -97,11 +97,11 @@ class SkPred(object):
         model.add(Dense(1,activation='linear'))
         
         model.compile(loss='mse', optimizer='adam')
-        model.summary()
+        #model.summary()
         
         model.fit(
             x_datas, y_train, epochs=self.epochs, 
-            batch_size=self.batch_size, verbose=1)
+            batch_size=self.batch_size, verbose=0)
         self.df_train=df_train
         self.df_test=df_test
         self.x_datas=x_datas
@@ -141,15 +141,22 @@ class SkPred(object):
         pred_close = pd.Series(pred_close,index=actural_close.index)
         #line_plot(actural_close,pred_close,'actural','pred')
         
-        merge_debug=df_test[self.window_size:]
-        merge_debug['pred']=pred_close
+        merge_debug=df_test[self.window_size:].copy()
+        index0=merge_debug.index[0]
+        index1=merge_debug.index[len(merge_debug)-1]
+ #       index1+=datetime.timedelta(days=1)
+        merge_debug.loc[index0:index1,'pred']=pred_close
         
-        merge_debug['uprate']=np.zeros((len(merge_debug),),dtype='float64')
+        uprates=[]
         for i in range(len(merge_debug)-1):
-            c = merge_debug['close'][i]
-            nexthigh=merge_debug['high'][i+1]
-            merge_debug['uprate'][i]=(nexthigh/c-1) * 100
-        print(merge_debug)
+            i0=merge_debug.index[i]
+            i1=merge_debug.index[i+1]
+            c = merge_debug.loc[i0,'close']
+            nexthigh=merge_debug.loc[i1,'high']
+            uprates.append( (nexthigh/c-1)*100 )
+        uprates.append(0)
+        merge_debug.loc[index0:index1,'uprate']=np.array(uprates)
+
         self.merge_debug=merge_debug 
         self.pred_close=pred_close
 
@@ -169,7 +176,7 @@ class SkPred(object):
     def trytreat(self):
         merge_debug = self.merge_debug
         predcolname='pred'
-        onetreat=dict()
+        treatresult=[]
         values=merge_debug[predcolname].values
         for i in range(1,len(merge_debug)-1):
             v0=values[i-1]
@@ -177,25 +184,65 @@ class SkPred(object):
             v2=values[i+1]
             
             if(v0>=v1 and v1<v2):
+                onetreat=dict()
+                treatresult.append(onetreat) 
                 dayindex=merge_debug.index[i]
-                print(dayindex)
+                today = merge_debug[i:i+1]
+                onetreat['datetime']=dayindex
+                tomorrow = merge_debug[i+1:i+2]
+                th = tomorrow['high'][0]
+                tc = today['close'][0]
+                
+                if th/tc>=1.03:
+                    onetreat['percent3']=1
+                else:
+                    onetreat['percent3']=0
+                    
+                if th/tc>=1.05:
+                    onetreat['percent5']=1
+                else:
+                    onetreat['percent5']=0
+                    
+                if th/tc>=1.1:
+                    onetreat['percent10']=1
+                else:
+                    onetreat['percent10']=0
+            #end of      if(v0>=v1 and v1<v2):
+        #end of for
+        self.treatresult=treatresult
+                    
+                                       
             
+#testcodes=['000561','000652','000933','000970','002019','002236','002608','002807',
+#testcodes=['300055','300152','600133','600446','600755']        
+
+#testcodes=['600031','000401','002371']
         
-        
-skpred=SkPred('600031m.txt')  
-'''将最后一行数据复制，日期索引加30天'''
-skpred.copylastdata()
-skpred.train(12) #12天
+testcodes=['002019']
 
-skpred.predict(skpred.df[len(skpred.df)-24:])
-skpred.drawpredict()
+for skcode in testcodes:
+    skpred=SkPred(skcode+'m.txt')  
+    '''将最后一行数据复制，日期索引加30天'''
+    skpred.copylastdata()
+    
+    skpred.train(1) #测试用最近6天，前面的用于训练
+    
+    '''预测'''
+    df = skpred.df
+    totallen=len(df)
+    index0=df.index.values[totallen - 24]
+    index1=df.index.values[totallen - 1]
+    df_test=df.loc[index0:index1]
+    skpred.predict(df_test)
+    '''画图表'''
+    skpred.drawpredict()
+    print(skpred.merge_debug)
+    
+    '''计算3percent 5percent'''
+    skpred.trytreat()
+    
+    print(skcode)
+    print(skpred.treatresult)
 
-skpred.trytreat()
-'''预测'''
 
-
-
-
-        
-        
-        
+print("finished,exit...")
