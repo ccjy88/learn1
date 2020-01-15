@@ -15,16 +15,18 @@ from keras.layers import Activation, Dense, Dropout, LSTM
 '''预测'''
 class SkPred(object):
     '''用于测试最近的天数'''
-    lastdays=12
+    window_size=3
+    lastdays=window_size+1
 
     epochs=100
     batch_size=32
     lstm_size=128
     input_colnames=['low']
     target_colname='target_col'
-    window_size=3
     max_days=500
     filename=''
+    
+    
     def __init__(self, filename,):
         self.filename=filename
         self.readfile()
@@ -55,10 +57,11 @@ class SkPred(object):
             # vol=float(words[5])
             '''计算中线'''
             datas.append(daydata)
-            df=pd.DataFrame(datas) 
-            if len(df)>self.max_days :
-                df = df[len(df) - self.max_days:]
-            self.df = df.set_index(['date'],drop=True)
+
+        df=pd.DataFrame(datas) 
+        if len(df)>self.max_days :
+            df = df[len(df) - self.max_days:]
+        self.df = df.set_index(['date'],drop=True)
 
     '''复制最后1行'''
     def copylastdata(self):
@@ -78,15 +81,15 @@ class SkPred(object):
         df_train=df[:split_at]
         df_test=df[split_at:]
         
-        x_datas=self.extract_window_data(df_train,self.window_size)
+        x_datas=self.extract_window_data(df_train)
         
-        '''将5天后close做为y'''
-        y_train=df_train[self.window_size:][self.target_colname].values
+        '''将5天后close做为y，这里copy()的目的是为了不破坏df_train'''
+        y_train=df_train[self.window_size:][self.target_colname].copy().values
         y_train/=df_train[:-self.window_size][self.target_colname].values
         y_train-=1
         
         '''测试数据'''
-        x_test_datas=self.extract_window_data(df_test,self.window_size)
+        x_test_datas=self.extract_window_data(df_test)
         input_dim=len(self.input_colnames)
         model = Sequential()
         model.add(LSTM(self.lstm_size, input_shape=(self.window_size,input_dim)))
@@ -112,7 +115,8 @@ class SkPred(object):
         return df / df.iloc[0] - 1
     
     
-    def extract_window_data(self,df_train,window_size):
+    def extract_window_data(self,df_train):
+        window_size=self.window_size
         x_datas=[]
         for i in range(len(df_train) - window_size):
             day5 = df_train[i:i+window_size][self.input_colnames];
@@ -125,12 +129,12 @@ class SkPred(object):
     def calc_target_col(self,openprice,high,low,close):
         return low
     
-    def predict(self):
+    def predict(self,df_test):
         model=self.model
-        pred_data = model.predict(self.x_test_datas)
+        x_test_datas=self.extract_window_data(df_test)
+        pred_data = model.predict(x_test_datas)
         pred_data = pred_data.squeeze()
         
-        df_test=self.df_test
         actural_close=df_test[self.window_size:][self.target_colname]
         
         pred_close = df_test[:-self.window_size][self.target_colname].values*(pred_data+1)
@@ -162,13 +166,31 @@ class SkPred(object):
         ax.set_title(self.filename, fontsize=16)
         ax.legend(loc='best', fontsize=16);
         
+    def trytreat(self):
+        merge_debug = self.merge_debug
+        predcolname='pred'
+        onetreat=dict()
+        values=merge_debug[predcolname].values
+        for i in range(1,len(merge_debug)-1):
+            v0=values[i-1]
+            v1=values[i]
+            v2=values[i+1]
+            
+            if(v0>=v1 and v1<v2):
+                dayindex=merge_debug.index[i]
+                print(dayindex)
+            
+        
         
 skpred=SkPred('600031m.txt')  
 '''将最后一行数据复制，日期索引加30天'''
 skpred.copylastdata()
 skpred.train(12) #12天
-skpred.predict()
+
+skpred.predict(skpred.df[len(skpred.df)-24:])
 skpred.drawpredict()
+
+skpred.trytreat()
 '''预测'''
 
 
