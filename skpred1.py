@@ -5,6 +5,8 @@ Created on Wed Jan 15 09:39:40 2020
 @author: wwh
 """
 
+import sys as sys
+import tracemalloc
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,6 +14,7 @@ import datetime
 import gc
 import os
 import re
+import time
 from keras.models import Sequential
 from keras.layers import Activation, Dense, Dropout, LSTM
 
@@ -266,21 +269,17 @@ class SkPred(object):
             
 
 
-dirname='days'        
-testcodes=[]
-pattern = re.compile(r'\d{6,6}.txt')
-for filename in os.listdir(dirname):
-    if pattern.match(filename):
-        skcode=filename[0:6]
-        testcodes.append(skcode)
       
         
 def doTreate(testcodes):
     for skcode in testcodes:
+        print("begin read ",skcode)
         skpred=SkPred(skcode)  
         '''将最后一行数据复制，日期索引加30天'''
         skpred.readDays(skcode)
         skpred.copylastdata()
+        if(len(skpred.df)<36): #数据太少
+            continue
         
         skpred.train(1) #测试用最近6天，前面的用于训练
         
@@ -303,20 +302,61 @@ def doTreate(testcodes):
         print(skcode)
         print(skpred.treatresult)
         if skpred.found_current==True:
+            f=open('发现.txt','a')
+            f.write(time.strftime('%Y-%m-%d %H:%M:%S '))
+            f.write(skcode)
+            f.write('\n')
+            f.flush()
+            f.close()
             print("===========!!!!! Found current {} !!!!!===========".format(skcode))
         
         del skpred,df,df_test
         del index0,index1
         gc.collect()
+        
+        
+        
     #end if for skcode
       
     del testcodes
     gc.collect()
         
+
+tracemalloc.start()
+snapshot1 = tracemalloc.take_snapshot()
+
+dirname='days'        
+testcodes=[]
+pattern = re.compile(r'\d{6,6}.txt')
+maxcount=25
+skipcode=''
+
+skcodeset=set()
+for filename in os.listdir(dirname):
+    if pattern.match(filename):
+        skcode=filename[0:6]
+        if skcode not in skcodeset:
+            skcodeset.add(skcode)
+skcodes=sorted(skcodeset)
+
+
+for skcode in skcodes:
+    if (skcode <= skipcode):
+        continue
+    if(maxcount==0 ):
+        break
+    maxcount-=1
+    testcodes.append(skcode)
+        
    
 '''手工指定'''
-testcodes=['600797']     
+testcodes=['000858']     
+
 doTreate(testcodes)        
+
+snapshot2 = tracemalloc.take_snapshot()
+top_stats = snapshot2.compare_to(snapshot1, 'lineno')
+#print(top_stats)
     
 print("finished,exit...")
 
