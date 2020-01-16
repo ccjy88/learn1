@@ -9,8 +9,50 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import datetime
+import gc
+import os
+import re
 from keras.models import Sequential
 from keras.layers import Activation, Dense, Dropout, LSTM
+
+def Readday2month(filename):
+    f = open('days/'+filename+'.txt')
+    lines = f.readlines()
+    
+    pattern = re.compile(r'^\d{4,4}/')
+
+    records=[]
+    record=dict(date=None,openprice=0,close=0,high=0,low=1e10,yearmonth='')
+    for line in lines:
+        if pattern.match(line)==None:
+            continue
+        line = line.strip()
+        words = line.split()
+        strdate=words[0]
+        strdate=strdate.replace('/','-')
+        ym=strdate[0:7]
+        date=pd.to_datetime(strdate,format='%Y-%m-%d')
+        openprice=float(words[1])
+        high=float(words[2])
+        low=float(words[3])
+        close=float(words[4])
+
+        if ym!=record['yearmonth']:
+            if len(record['yearmonth'])>0:
+                records.append(record)
+            record=dict(date=None,openprice=0,close=0,high=0,low=1e10,yearmonth=ym)
+            record['date']=date
+            record['openprice']=openprice
+        
+        record['date']=date
+        record['close']=close
+        if high>record['high']:
+            record['high']=high
+        if low<record['low']:
+            record['low']=low
+     #end for
+    records.append(record)
+    return records
 
 '''预测'''
 class SkPred(object):
@@ -22,15 +64,22 @@ class SkPred(object):
     batch_size=32
     lstm_size=128
     input_colnames=['low']
-    target_colname='target_col'
+    target_colname='low'
     max_days=500
     filename=''
+    found_current=False
     
     
     def __init__(self, filename,):
         self.filename=filename
-        self.readfile()
         
+    def readDays(self,skcode):
+        monthrec = Readday2month(skcode)
+        df=pd.DataFrame(monthrec) 
+        if len(df)>self.max_days :
+            df = df[len(df) - self.max_days:]
+        self.df = df.set_index(['date'],drop=True)
+
     def readfile(self):
         f=open(self.filename,mode='r')
         lines = f.readlines()
@@ -165,7 +214,7 @@ class SkPred(object):
         pred_close=self.pred_close
         lw=2
         fig, ax = plt.subplots(1, figsize=(15, 8))
-        ax.plot(merge_debug['high'], color='yellow',label='high', marker='o',linewidth=lw)
+        ax.plot(merge_debug['high'], color='gray',label='high', marker='o',linewidth=lw)
         ax.plot(merge_debug['close'],color='green',marker='o', label='close', linewidth=lw)
         ax.plot(pred_close,color='red',marker='o', label='pred', linewidth=lw,linestyle='dashed')
         #ax.plot(merge_debug['low'], label='low',marker='o', linewidth=lw)
@@ -184,6 +233,8 @@ class SkPred(object):
             v2=values[i+1]
             
             if(v0>=v1 and v1<v2):
+                if i==len(merge_debug)-2:
+                    self.found_current=True
                 onetreat=dict()
                 treatresult.append(onetreat) 
                 dayindex=merge_debug.index[i]
@@ -213,36 +264,59 @@ class SkPred(object):
                     
                                        
             
-#testcodes=['000561','000652','000933','000970','002019','002236','002608','002807',
-#testcodes=['300055','300152','600133','600446','600755']        
 
-#testcodes=['600031','000401','002371']
+
+dirname='days'        
+testcodes=[]
+pattern = re.compile(r'\d{6,6}.txt')
+for filename in os.listdir(dirname):
+    if pattern.match(filename):
+        skcode=filename[0:6]
+        testcodes.append(skcode)
+      
         
-testcodes=['002019']
-
-for skcode in testcodes:
-    skpred=SkPred(skcode+'m.txt')  
-    '''将最后一行数据复制，日期索引加30天'''
-    skpred.copylastdata()
+def doTreate(testcodes):
+    for skcode in testcodes:
+        skpred=SkPred(skcode)  
+        '''将最后一行数据复制，日期索引加30天'''
+        skpred.readDays(skcode)
+        skpred.copylastdata()
+        
+        skpred.train(1) #测试用最近6天，前面的用于训练
+        
+        '''预测'''
+        df = skpred.df
+        totallen=len(df)
+        index0=df.index.values[totallen - 24]
+        index1=df.index.values[totallen - 1]
+        df_test=df.loc[index0:index1]
+        
+        skpred.predict(df_test)
+        if len(testcodes)==1:
+            '''画图表'''
+            skpred.drawpredict()
+            print(skpred.merge_debug)
+        
+        '''计算3percent 5percent'''
+        skpred.trytreat()
+        
+        print(skcode)
+        print(skpred.treatresult)
+        if skpred.found_current==True:
+            print("===========!!!!! Found current {} !!!!!===========".format(skcode))
+        
+        del skpred,df,df_test
+        del index0,index1
+        gc.collect()
+    #end if for skcode
+      
+    del testcodes
+    gc.collect()
+        
+   
+'''手工指定'''
+testcodes=['600797']     
+doTreate(testcodes)        
     
-    skpred.train(1) #测试用最近6天，前面的用于训练
-    
-    '''预测'''
-    df = skpred.df
-    totallen=len(df)
-    index0=df.index.values[totallen - 24]
-    index1=df.index.values[totallen - 1]
-    df_test=df.loc[index0:index1]
-    skpred.predict(df_test)
-    '''画图表'''
-    skpred.drawpredict()
-    print(skpred.merge_debug)
-    
-    '''计算3percent 5percent'''
-    skpred.trytreat()
-    
-    print(skcode)
-    print(skpred.treatresult)
-
-
 print("finished,exit...")
+
