@@ -260,10 +260,10 @@ class SkPred(object):
         ax.set_title(self.filename, fontsize=16)
 #       ax.legend(loc='best', fontsize=16);
         
-    def trytreat(self,skcode):
+    def choose(self,skcode):
         predcolname='pred_low'
         values=self.df_pred[predcolname].values
-        if values[-1]>np.array(values[:-1]).max():
+        if values[-1]>np.array(values[:-1]).max() and (values[-2]<=values[-3] or values[-3]<=values[-4]):
             print(skcode)
             f=open('发现.txt','a')
             f.write(time.strftime('%Y-%m-%d %H:%M:%S '))
@@ -285,7 +285,10 @@ def doTreate(testcodes):
         if(len(skpred.df)<24): #数据太少
             continue
 
-        skpred.train(8) #
+        if len(testcodes)>1:
+            skpred.train(8) #批量固定8
+        else:
+            skpred.train(18) #
         '''预测'''
         skpred.predict()
 
@@ -294,7 +297,7 @@ def doTreate(testcodes):
             skpred.drawpredict()
         
         '''计算3percent 5percent'''
-        skpred.trytreat(skcode)
+        skpred.choose(skcode)
         
         del skpred
         gc.collect()
@@ -313,7 +316,7 @@ dirname='days'
 testcodes=[]
 pattern = re.compile(r'\d{6,6}.txt')
 maxcount=30
-skipcode='300251'
+skipcode=''
 
 
 skcodeset=set()
@@ -335,7 +338,7 @@ for skcode in skcodes:
         
    
 '''手工指定'''
-testcodes=['000002']
+#testcodes=['002019']
 doTreate(testcodes)        
 
 snapshot2 = tracemalloc.take_snapshot()
