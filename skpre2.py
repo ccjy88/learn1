@@ -63,6 +63,7 @@ def Readday2month(filename):
     records=[]
     record=dict(date=None,openprice=0,close=0,high=0,low=1e10,yearmonth='')
     for line in lines:
+        line=line.strip()
         if pattern.match(line)==None:
             continue
         line = line.strip()
@@ -103,7 +104,7 @@ class SkPred(object):
     epochs=100
     batch_size=10
     lstm_size=128
-    target_colname='close'
+    target_colname=['close']
     filename=''
     
     
@@ -125,12 +126,23 @@ class SkPred(object):
         df.loc[newindex]=lastrec
         
         '''归1'''
-        supervised_data = series_to_supervised(df.loc[:,[self.target_colname]].values, 
+        supervised_data = series_to_supervised(df.loc[:,self.target_colname].values, 
             self.window_size-1, 1 ,dropnan=True)
 
-        self.df=df
+        self.df=df[self.window_size:]
         
-        low_x = supervised_data.loc[:,['var1(t-2)','var1(t-1)','var1(t)']]
+        calcols=[]
+        
+        for var in range(1,len(self.target_colname)+1):
+            for t in range(-2,1,1):
+                if t == 0 :
+                    calcols.append('var{}(t)'.format(var))
+                else:
+                    calcols.append('var{}(t{})'.format(var,t))
+        
+        calcols=np.array(calcols)
+        
+        low_x = supervised_data.loc[:,calcols]
         low_x = np.array(low_x.values)
         scaler=MinMaxScaler()
         low_x = scaler.fit_transform(low_x)
@@ -263,7 +275,8 @@ class SkPred(object):
     def choose(self,skcode):
         predcolname='pred_low'
         values=self.df_pred[predcolname].values
-        if values[-1]>np.array(values[:-1]).max() and (values[-2]<=values[-3] or values[-3]<=values[-4]):
+        '''3个月新高'''
+        if values[-1]>np.array(values[-4:-1]).max() and (values[-2]<=values[-3] or values[-3]<=values[-4]):
             print(skcode)
             f=open('发现.txt','a')
             f.write(time.strftime('%Y-%m-%d %H:%M:%S '))
@@ -295,6 +308,7 @@ def doTreate(testcodes):
         if len(testcodes)==1:
             '''画图表'''
             skpred.drawpredict()
+            print(skpred.df_pred)
         
         '''计算3percent 5percent'''
         skpred.choose(skcode)
@@ -338,7 +352,7 @@ for skcode in skcodes:
         
    
 '''手工指定'''
-#testcodes=['002019']
+testcodes=['002019']
 doTreate(testcodes)        
 
 snapshot2 = tracemalloc.take_snapshot()
