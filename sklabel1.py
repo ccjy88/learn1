@@ -22,13 +22,13 @@ from sklearn.preprocessing import LabelEncoder
 
 def Checkdefine(df):
     checklist=dict()
-    checklist['ding']=set(['down','plat','up'])
-    checklist['up']=set(['up','up1','ding','plat'])
-    checklist['up1']=set(['up','plat','ding'])
+    checklist['ding']=set(['down','down1','plat','up'])
+    checklist['up']=set(['up','up1','ding','plat','up3'])
+    checklist['up1']=set(['up','plat','ding','up3'])
+    checklist['up3']=set(['up','plat','ding','up3'])
     checklist['down']=set(['plat','up','down','up1'])
     checklist['down1']=set(['up','down','plat'])
-    checklist['plat']=set(['up1','down1','plat'])
-    
+    checklist['plat']=set(['up','up1','down1','plat'])
     
     index=df.index
     for i in range(len(index)-1):
@@ -146,6 +146,7 @@ def calcSklog10(df,skcode,yearmonth,windowsize):
     log10v = log10v - minv
     return log10v
 
+
 df_define = ReadlabelDefine()
 windowsize=6
 
@@ -169,7 +170,9 @@ for row in df_define.index:
     
 x_train=np.array(train_datas)
 encoder=LabelEncoder()
-encoder.fit(label_datas)
+encoder.fit(['ding', 'down' ,'down1', 'plat', 'up', 'up1', 'up3'])
+
+#encoder.fit(label_datas)
 encoded_Y=encoder.transform(label_datas)
 maxclasses = encoded_Y.max()+1
 y_train=np_utils.to_categorical(encoded_Y)
@@ -183,8 +186,11 @@ model.add(Dense(maxclasses,activation='softmax'))
 model.compile(loss='categorical_crossentropy',optimizer='adam',metrics=['accuracy'])
 model.fit(x_train,y_train,epochs=150,verbose=1,batch_size=1)
 
+model.save('sklabel1.h5')
+
+
 testdatas=[]
-skcode='002019'
+skcode='000977'
 df_data = DataFrame(Readday2month(skcode))
 
 #testdatas.append(calcSklog10(df_data,skcode,'2020-01',windowsize))
